@@ -1,0 +1,885 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SmartSort AI — SO-ARM101 Live System</title>
+<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Rajdhani:wght@400;600;700&family=Orbitron:wght@400;700;900&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #050a0f;
+    --panel: #080e16;
+    --border: #0d2137;
+    --accent: #00d4ff;
+    --accent2: #00ff9d;
+    --danger: #ff3a3a;
+    --warn: #ffaa00;
+    --text: #c8e4f0;
+    --dim: #3a5a70;
+    --card-w: 90px;
+    --card-h: 58px;
+    --belt-y: 310px;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { background:var(--bg); font-family:'Rajdhani',sans-serif; color:var(--text); overflow:hidden; height:100vh; width:100vw; }
+  body::after { content:''; position:fixed; inset:0; background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,0.07) 2px,rgba(0,0,0,0.07) 4px); pointer-events:none; z-index:1000; }
+
+  /* HEADER */
+  #header { position:fixed; top:0; left:0; right:0; height:52px; background:linear-gradient(90deg,#020810,#040d1a,#020810); border-bottom:1px solid var(--border); display:flex; align-items:center; justify-content:space-between; padding:0 20px; z-index:100; }
+  .logo { font-family:'Orbitron',monospace; font-size:16px; font-weight:900; color:var(--accent); letter-spacing:3px; text-shadow:0 0 20px rgba(0,212,255,0.5); }
+  .logo span { color:var(--accent2); }
+  .hdr-stats { display:flex; gap:24px; }
+  .hdr-stat { font-family:'Share Tech Mono',monospace; font-size:11px; color:var(--dim); display:flex; flex-direction:column; align-items:center; }
+  .hdr-stat .val { font-size:17px; font-weight:700; color:var(--accent2); font-family:'Orbitron',monospace; }
+  .hdr-stat.danger .val { color:var(--danger); }
+  #status-bar { font-family:'Share Tech Mono',monospace; font-size:11px; color:var(--accent); display:flex; align-items:center; gap:8px; }
+  .pulse-dot { width:8px; height:8px; border-radius:50%; background:var(--accent2); animation:pulse 1s ease-in-out infinite; }
+  @keyframes pulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.4;transform:scale(.7)} }
+
+  /* CONNECTION BADGE */
+  #conn-badge { display:flex; align-items:center; gap:6px; padding:4px 10px; border-radius:3px; border:1px solid; font-family:'Share Tech Mono',monospace; font-size:10px; letter-spacing:1px; cursor:pointer; }
+  #conn-badge.connected { border-color:var(--accent2); color:var(--accent2); }
+  #conn-badge.disconnected { border-color:var(--danger); color:var(--danger); }
+  #conn-badge.connecting { border-color:var(--warn); color:var(--warn); animation:blink .6s step-end infinite; }
+  #conn-badge .conn-dot { width:6px; height:6px; border-radius:50%; background:currentColor; }
+
+  /* PANELS */
+  #panel-left { position:fixed; top:52px; left:0; width:210px; bottom:0; background:var(--panel); border-right:1px solid var(--border); padding:14px 10px; overflow-y:auto; }
+  #panel-right { position:fixed; top:52px; right:0; width:270px; bottom:0; background:var(--panel); border-left:1px solid var(--border); padding:14px 10px; overflow-y:auto; }
+  #sim-wrap { position:fixed; top:52px; left:210px; right:270px; bottom:0; overflow:hidden; }
+  #sim-canvas { width:100%; height:100%; position:relative; }
+
+  .panel-title { font-family:'Orbitron',monospace; font-size:9px; font-weight:700; letter-spacing:3px; color:var(--dim); margin-bottom:10px; padding-bottom:6px; border-bottom:1px solid var(--border); }
+
+  /* CONTROLS */
+  .ctrl-btn { width:100%; padding:9px; margin-bottom:7px; border-radius:3px; border:1px solid; font-family:'Orbitron',monospace; font-size:10px; font-weight:700; letter-spacing:2px; cursor:pointer; transition:all .2s; background:transparent; }
+  .ctrl-btn.start { border-color:var(--accent2); color:var(--accent2); }
+  .ctrl-btn.start:hover { background:rgba(0,255,157,.1); box-shadow:0 0 10px rgba(0,255,157,.3); }
+  .ctrl-btn.stop { border-color:var(--danger); color:var(--danger); }
+  .ctrl-btn.stop:hover { background:rgba(255,58,58,.1); }
+  .ctrl-btn.reset { border-color:var(--dim); color:var(--dim); }
+  .ctrl-btn.robot-trigger { border-color:var(--warn); color:var(--warn); font-size:11px; }
+  .ctrl-btn.robot-trigger:hover { background:rgba(255,170,0,.1); box-shadow:0 0 10px rgba(255,170,0,.4); }
+  .ctrl-btn:disabled { opacity:.3; cursor:not-allowed; }
+
+  .ctrl-label { font-family:'Share Tech Mono',monospace; font-size:10px; color:var(--dim); margin-bottom:3px; display:flex; justify-content:space-between; }
+  input[type=range] { width:100%; accent-color:var(--accent); margin-bottom:10px; }
+
+  /* ROBOT STATUS BOX */
+  #robot-status-box { background:rgba(0,0,0,.3); border:1px solid var(--border); border-radius:5px; padding:9px; margin-bottom:10px; }
+  .rs-row { display:flex; justify-content:space-between; align-items:center; margin-bottom:4px; }
+  .rs-label { font-family:'Share Tech Mono',monospace; font-size:9px; color:var(--dim); }
+  .rs-val { font-family:'Share Tech Mono',monospace; font-size:9px; color:var(--accent); }
+  .rs-val.active { color:var(--warn); animation:blink .5s step-end infinite; }
+  .rs-val.ok { color:var(--accent2); }
+  .rs-val.err { color:var(--danger); }
+  @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0} }
+
+  /* BELT */
+  #belt-track { position:absolute; top:var(--belt-y); left:0; right:0; height:80px; }
+  .belt-surface { position:absolute; top:10px; left:0; right:0; height:60px; background:#0a1520; border-top:2px solid #1a3a5a; border-bottom:2px solid #1a3a5a; overflow:hidden; }
+  .belt-lines { position:absolute; inset:0; background:repeating-linear-gradient(90deg,transparent 0px,transparent 28px,rgba(0,180,255,0.12) 28px,rgba(0,180,255,0.12) 32px); animation:beltScroll 1.2s linear infinite; }
+  @keyframes beltScroll { from{background-position:0 0} to{background-position:-32px 0} }
+  .belt-roller { position:absolute; top:0; width:14px; height:80px; background:linear-gradient(180deg,#1a2a3a,#0d1a26,#1a2a3a); border-left:1px solid #2a4a6a; border-right:1px solid #2a4a6a; }
+  .belt-glow { position:absolute; top:8px; left:0; right:0; height:2px; background:linear-gradient(90deg,transparent,var(--accent),transparent); opacity:.35; animation:glowPulse 2s ease-in-out infinite; }
+  @keyframes glowPulse { 0%,100%{opacity:.2} 50%{opacity:.6} }
+
+  /* ID CARDS */
+  .id-card { position:absolute; width:var(--card-w); height:var(--card-h); border-radius:6px; top:calc(var(--belt-y) + 21px); cursor:pointer; }
+  .id-card .card-inner { width:100%; height:100%; border-radius:6px; padding:5px 7px; position:relative; overflow:hidden; border:1px solid rgba(255,255,255,.15); background:linear-gradient(135deg,#1a2a4a,#0f1e35); transition:box-shadow .2s; }
+  .id-card .card-stripe { position:absolute; top:0; left:0; right:0; height:14px; border-radius:5px 5px 0 0; }
+  .id-card .card-photo { position:absolute; top:18px; right:7px; width:22px; height:26px; border-radius:3px; background:#1a3a5a; border:1px solid rgba(0,200,255,.3); display:flex; align-items:center; justify-content:center; font-size:13px; }
+  .id-card .card-photo.missing { background:#3a1a1a; border-color:rgba(255,60,60,.4); }
+  .id-card .card-text { position:absolute; top:18px; left:7px; right:36px; }
+  .id-card .cname { font-family:'Share Tech Mono',monospace; font-size:7px; color:#a0c8e0; line-height:1.4; white-space:nowrap; overflow:hidden; }
+  .id-card .cname.miss { color:#ff6060; text-decoration:line-through; opacity:.6; }
+  .id-card .corg { font-family:'Share Tech Mono',monospace; font-size:6px; color:#60a0c0; margin-top:2px; }
+  .id-card .corg.miss { color:#ff4444; text-decoration:line-through; opacity:.5; }
+  .id-card .card-barcode { position:absolute; bottom:4px; left:7px; right:7px; height:6px; background:repeating-linear-gradient(90deg,#fff,#fff 1px,transparent 1px,transparent 2.5px); opacity:.2; }
+
+  .id-card.scanning .card-inner::after { content:''; position:absolute; inset:0; background:linear-gradient(transparent,rgba(0,212,255,.35),transparent); animation:scanLine .6s linear; }
+  @keyframes scanLine { from{transform:translateY(-100%)} to{transform:translateY(200%)} }
+  .id-card.valid-flash .card-inner { border-color:var(--accent2); box-shadow:0 0 14px rgba(0,255,157,.6); }
+  .id-card.invalid-flash .card-inner { border-color:var(--danger); box-shadow:0 0 14px rgba(255,58,58,.7); }
+
+  /* SCAN ZONE */
+  #scan-zone { position:absolute; top:calc(var(--belt-y) - 55px); left:50%; transform:translateX(-50%); width:120px; }
+  .scan-gate { position:absolute; width:3px; height:170px; top:0; background:linear-gradient(180deg,transparent,var(--accent),var(--accent),transparent); opacity:.4; }
+  .scan-gate.left { left:0; } .scan-gate.right { right:0; }
+  .scan-beam { position:absolute; top:56px; left:3px; right:3px; height:2px; background:linear-gradient(90deg,transparent,var(--accent),var(--accent),transparent); animation:beamPulse .9s ease-in-out infinite; box-shadow:0 0 8px var(--accent); }
+  @keyframes beamPulse { 0%,100%{opacity:.3} 50%{opacity:1} }
+  .scan-label { position:absolute; top:-22px; left:50%; transform:translateX(-50%); font-family:'Share Tech Mono',monospace; font-size:9px; color:var(--accent); white-space:nowrap; letter-spacing:2px; }
+  #scan-zone.active .scan-beam { animation:beamActive .12s ease-in-out infinite; background:linear-gradient(90deg,transparent,#fff,#fff,transparent); }
+  @keyframes beamActive { 0%,100%{opacity:.8} 50%{opacity:1} }
+
+  /* ROBOT ARM SVG */
+  #robot-wrap { position:absolute; left:50%; transform:translateX(-50%); top:60px; width:100px; }
+  #robot-svg { width:100px; height:200px; overflow:visible; }
+
+  /* BINS */
+  .bin { position:absolute; bottom:24px; width:96px; height:76px; }
+  #bin-valid { left:50px; }
+  #bin-invalid { right:50px; }
+  .bin-body { width:100%; height:100%; border-radius:0 0 7px 7px; border:1.5px solid; position:relative; display:flex; align-items:flex-end; justify-content:center; padding-bottom:7px; overflow:hidden; }
+  #bin-valid .bin-body { background:linear-gradient(180deg,rgba(0,255,157,.03),rgba(0,255,157,.07)); border-color:rgba(0,255,157,.35); }
+  #bin-invalid .bin-body { background:linear-gradient(180deg,rgba(255,58,58,.03),rgba(255,58,58,.07)); border-color:rgba(255,58,58,.35); }
+  .bin-fill { position:absolute; bottom:0; left:0; right:0; height:0; transition:height .5s ease; border-radius:0 0 5px 5px; }
+  #bin-valid .bin-fill { background:rgba(0,255,157,.14); }
+  #bin-invalid .bin-fill { background:rgba(255,58,58,.14); }
+  .bin-label { font-family:'Orbitron',monospace; font-size:8px; font-weight:700; letter-spacing:1px; position:relative; z-index:1; }
+  #bin-valid .bin-label { color:var(--accent2); }
+  #bin-invalid .bin-label { color:var(--danger); }
+  .bin-count { position:absolute; top:-26px; left:50%; transform:translateX(-50%); font-family:'Orbitron',monospace; font-size:19px; font-weight:900; }
+  #bin-valid .bin-count { color:var(--accent2); }
+  #bin-invalid .bin-count { color:var(--danger); }
+  .bin-top { height:7px; border-radius:2px 2px 0 0; border:1px solid; border-bottom:none; width:106px; margin-left:-5px; }
+  #bin-valid .bin-top { background:rgba(0,255,157,.18); border-color:rgba(0,255,157,.45); }
+  #bin-invalid .bin-top { background:rgba(255,58,58,.18); border-color:rgba(255,58,58,.45); }
+
+  /* DETECTOR CAMS */
+  .det-cam { position:absolute; top:calc(var(--belt-y) - 28px); width:16px; height:20px; background:#0d2035; border:1px solid #2a5a8a; border-radius:3px 3px 0 0; display:flex; align-items:center; justify-content:center; }
+  .det-cam::after { content:''; width:7px; height:7px; border-radius:50%; background:rgba(0,200,255,.55); box-shadow:0 0 6px rgba(0,200,255,.7); animation:camPulse 1.5s ease-in-out infinite; }
+  @keyframes camPulse { 0%,100%{opacity:.35} 50%{opacity:1} }
+
+  /* OCR BOX */
+  #ocr-box { background:rgba(0,0,0,.4); border:1px solid var(--border); border-radius:5px; padding:9px; margin-bottom:10px; font-family:'Share Tech Mono',monospace; font-size:10px; min-height:82px; }
+  .ocr-field { display:flex; gap:6px; align-items:center; margin-bottom:3px; }
+  .ocr-key { color:var(--dim); min-width:62px; }
+  .ocr-val { color:var(--accent2); }
+  .ocr-val.miss { color:var(--danger); text-decoration:line-through; }
+  .ocr-val.scanning { color:var(--warn); animation:blink .3s step-end infinite; }
+
+  /* LOG */
+  #scan-log { max-height:300px; overflow-y:auto; scrollbar-width:thin; scrollbar-color:var(--border) transparent; }
+  .log-entry { padding:7px; margin-bottom:5px; border-radius:3px; border-left:3px solid; background:rgba(255,255,255,.02); animation:logIn .3s ease-out; }
+  @keyframes logIn { from{opacity:0;transform:translateX(8px)} to{opacity:1;transform:none} }
+  .log-entry.valid { border-color:var(--accent2); }
+  .log-entry.invalid { border-color:var(--danger); }
+  .le-name { font-family:'Share Tech Mono',monospace; font-size:10px; color:var(--text); margin-bottom:2px; }
+  .le-status { font-family:'Orbitron',monospace; font-size:8px; font-weight:700; }
+  .log-entry.valid .le-status { color:var(--accent2); }
+  .log-entry.invalid .le-status { color:var(--danger); }
+  .le-issue { font-family:'Share Tech Mono',monospace; font-size:9px; color:var(--danger); margin-top:2px; opacity:.85; }
+  .le-time { font-family:'Share Tech Mono',monospace; font-size:9px; color:var(--dim); text-align:right; margin-top:2px; }
+
+  /* ACC BAR */
+  .acc-bar-bg { width:100%; height:5px; background:rgba(255,255,255,.05); border-radius:3px; margin-bottom:10px; overflow:hidden; }
+  .acc-bar-fill { height:100%; background:linear-gradient(90deg,var(--accent),var(--accent2)); border-radius:3px; transition:width .5s; }
+
+  /* ALERT OVERLAY */
+  #alert-overlay { position:fixed; inset:0; pointer-events:none; z-index:500; opacity:0; }
+  @keyframes flashRed { 0%{opacity:1} 100%{opacity:0} }
+  @keyframes flashGreen { 0%{opacity:1} 100%{opacity:0} }
+
+  /* PARTICLE */
+  .particle { position:absolute; width:4px; height:4px; border-radius:50%; pointer-events:none; animation:pFly 1s ease-out forwards; }
+  @keyframes pFly { 0%{opacity:1;transform:scale(1) translate(0,0)} 100%{opacity:0;transform:scale(0) translate(var(--dx),var(--dy))} }
+
+  /* TOOLTIP */
+  #tooltip { position:fixed; background:#0d2137; border:1px solid var(--accent); border-radius:5px; padding:7px 10px; font-family:'Share Tech Mono',monospace; font-size:10px; color:var(--text); pointer-events:none; z-index:999; display:none; max-width:170px; line-height:1.7; }
+
+  /* ROBOT LOG */
+  #robot-log { max-height:100px; overflow-y:auto; background:rgba(0,0,0,.3); border:1px solid var(--border); border-radius:4px; padding:6px; font-family:'Share Tech Mono',monospace; font-size:9px; color:var(--dim); margin-bottom:10px; }
+  .rl-entry { margin-bottom:2px; }
+  .rl-entry.trigger { color:var(--warn); }
+  .rl-entry.ok { color:var(--accent2); }
+  .rl-entry.err { color:var(--danger); }
+
+  ::-webkit-scrollbar { width:3px; }
+  ::-webkit-scrollbar-thumb { background:var(--border); border-radius:2px; }
+</style>
+</head>
+<body>
+
+<div id="alert-overlay"></div>
+<div id="tooltip"></div>
+
+<!-- HEADER -->
+<div id="header">
+  <div class="logo">SMART<span>SORT</span> AI <span style="font-size:10px;opacity:.4;margin-left:6px">SO-ARM101</span></div>
+  <div class="hdr-stats">
+    <div class="hdr-stat"><span class="val" id="hdr-total">0</span><span>TOTAL</span></div>
+    <div class="hdr-stat"><span class="val" id="hdr-valid">0</span><span>VALID</span></div>
+    <div class="hdr-stat danger"><span class="val" id="hdr-invalid">0</span><span>INVALID</span></div>
+    <div class="hdr-stat"><span class="val" id="hdr-acc">—</span><span>ACCURACY</span></div>
+  </div>
+  <div style="display:flex;align-items:center;gap:12px;">
+    <div id="conn-badge" class="disconnected" onclick="checkArmConnection()" title="Click to reconnect">
+      <div class="conn-dot"></div>
+      <span id="conn-text">ARM OFFLINE</span>
+    </div>
+    <div id="status-bar">
+      <div class="pulse-dot" id="pulse-dot"></div>
+      <span id="status-text">SYSTEM READY</span>
+    </div>
+  </div>
+</div>
+
+<!-- LEFT PANEL -->
+<div id="panel-left">
+  <div class="panel-title">CONVEYOR</div>
+  <button class="ctrl-btn start" onclick="startSystem()">▶ START BELT</button>
+  <button class="ctrl-btn stop"  onclick="stopSystem()">■ PAUSE</button>
+  <button class="ctrl-btn reset" onclick="resetSystem()">↺ RESET ALL</button>
+
+  <div style="height:10px"></div>
+  <div class="ctrl-label"><span>BELT SPEED</span><span id="speed-val">NORMAL</span></div>
+  <input type="range" id="speed-slider" min="1" max="5" value="3" oninput="updateSpeed(this.value)">
+
+  <div class="ctrl-label"><span>DEFECT RATE</span><span id="defect-val">30%</span></div>
+  <input type="range" id="defect-slider" min="0" max="100" value="30" oninput="updateDefectRate(this.value)">
+
+  <div style="height:8px"></div>
+  <div class="panel-title">SO-ARM101</div>
+
+  <button class="ctrl-btn robot-trigger" onclick="manualTriggerArm()">⚡ TRIGGER ARM</button>
+  <button class="ctrl-btn" style="border-color:var(--accent);color:var(--accent)" onclick="sendArmHome()">⌂ SEND HOME</button>
+
+  <div id="robot-status-box">
+    <div class="rs-row"><span class="rs-label">ARM STATUS</span><span class="rs-val ok" id="rs-status">STANDBY</span></div>
+    <div class="rs-row"><span class="rs-label">CONNECTION</span><span class="rs-val" id="rs-conn">CHECKING...</span></div>
+    <div class="rs-row"><span class="rs-label">MODE</span><span class="rs-val" id="rs-mode">—</span></div>
+    <div class="rs-row"><span class="rs-label">TRIGGERS</span><span class="rs-val" id="rs-triggers">0</span></div>
+    <div class="rs-row"><span class="rs-label">LAST ACTION</span><span class="rs-val" id="rs-action">—</span></div>
+  </div>
+
+  <div class="panel-title">ARM LOG</div>
+  <div id="robot-log"><div class="rl-entry">Waiting for connection...</div></div>
+
+  <div style="height:6px"></div>
+  <div style="font-family:'Share Tech Mono',monospace;font-size:8px;color:var(--dim);line-height:1.9">
+    <div>PORT: <span id="info-port" style="color:var(--accent)">—</span></div>
+    <div>SDK: LeRobot + Feetech</div>
+    <div>MOTORS: 6x STS3215</div>
+    <div>SERVER: localhost:5050</div>
+  </div>
+</div>
+
+<!-- SIMULATION -->
+<div id="sim-wrap">
+  <div id="sim-canvas">
+
+    <!-- Slots -->
+    <div style="position:absolute;right:0;top:calc(var(--belt-y) + 10px);width:20px;height:60px;background:linear-gradient(90deg,#0a1520,#050a0f);border-left:1px solid #1a3a5a;"></div>
+    <div style="position:absolute;left:0;top:calc(var(--belt-y) + 10px);width:20px;height:60px;background:linear-gradient(90deg,#050a0f,#0a1520);border-right:1px solid #1a3a5a;"></div>
+
+    <!-- Belt -->
+    <div id="belt-track">
+      <div class="belt-glow"></div>
+      <div class="belt-surface"><div class="belt-lines" id="belt-lines"></div></div>
+    </div>
+    <div class="belt-roller" style="left:0"></div>
+    <div class="belt-roller" style="right:0"></div>
+
+    <!-- Detector cameras -->
+    <div class="det-cam" style="left:calc(50% - 65px)"></div>
+    <div class="det-cam" style="left:calc(50% + 49px)"></div>
+
+    <!-- Scan zone -->
+    <div id="scan-zone">
+      <div class="scan-label">AI SCAN ZONE</div>
+      <div class="scan-gate left"></div>
+      <div class="scan-gate right"></div>
+      <div class="scan-beam"></div>
+    </div>
+
+    <!-- Robot arm (SVG-based, animated via JS) -->
+    <div id="robot-wrap">
+      <svg id="robot-svg" viewBox="0 0 100 200" xmlns="http://www.w3.org/2000/svg">
+        <!-- Base -->
+        <rect x="30" y="0" width="40" height="12" rx="3" fill="#0d2035" stroke="#2a5a8a" stroke-width="1"/>
+        <rect x="38" y="-5" width="24" height="6" rx="2" fill="#1a4a7a"/>
+
+        <!-- Upper arm joint -->
+        <circle cx="50" cy="12" r="5" fill="#1a4a7a" stroke="#3a8adc" stroke-width="1"/>
+
+        <!-- Upper arm -->
+        <g id="arm-upper-g" style="transform-origin:50px 12px; transform:rotate(0deg); transition:transform 0.5s ease-in-out;">
+          <rect x="46" y="12" width="8" height="55" rx="3" fill="#0d2a4a" stroke="#2a6aaa" stroke-width="1"/>
+
+          <!-- Elbow joint -->
+          <circle cx="50" cy="67" r="4" fill="#1a5a8a" stroke="#3a8adc" stroke-width="1"/>
+
+          <!-- Lower arm -->
+          <g id="arm-lower-g" style="transform-origin:50px 67px; transform:rotate(0deg); transition:transform 0.5s ease-in-out;">
+            <rect x="47" y="67" width="6" height="42" rx="2" fill="#0d3055" stroke="#2a7acc" stroke-width="1"/>
+
+            <!-- Wrist -->
+            <circle cx="50" cy="109" r="3" fill="#1a5a8a" stroke="#3a8adc" stroke-width="1"/>
+
+            <!-- Gripper -->
+            <g id="gripper-g" style="transform-origin:50px 109px; transition:transform 0.3s ease;">
+              <!-- Left finger -->
+              <rect id="grip-l" x="38" y="109" width="5" height="14" rx="2" fill="#2a7acc" stroke="#3a8adc" stroke-width="0.8" style="transform-origin:50px 109px; transform:rotate(-8deg); transition:transform 0.3s ease;"/>
+              <!-- Right finger -->
+              <rect id="grip-r" x="57" y="109" width="5" height="14" rx="2" fill="#2a7acc" stroke="#3a8adc" stroke-width="0.8" style="transform-origin:50px 109px; transform:rotate(8deg); transition:transform 0.3s ease;"/>
+              <!-- Center tip -->
+              <rect x="47" y="109" width="6" height="8" rx="1" fill="#1a5a8a"/>
+            </g>
+          </g>
+        </g>
+
+        <!-- Glow effect when active -->
+        <circle id="arm-glow" cx="50" cy="60" r="30" fill="none" stroke="rgba(0,212,255,0)" stroke-width="0"/>
+      </svg>
+    </div>
+
+    <!-- Valid bin -->
+    <div class="bin" id="bin-valid">
+      <div class="bin-count" id="valid-count">0</div>
+      <div class="bin-top"></div>
+      <div class="bin-body">
+        <div class="bin-fill" id="valid-fill"></div>
+        <div class="bin-label">✓ VALID</div>
+      </div>
+    </div>
+
+    <!-- Invalid bin -->
+    <div class="bin" id="bin-invalid">
+      <div class="bin-count" id="invalid-count">0</div>
+      <div class="bin-top"></div>
+      <div class="bin-body">
+        <div class="bin-fill" id="invalid-fill"></div>
+        <div class="bin-label">✗ REJECT</div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- RIGHT PANEL -->
+<div id="panel-right">
+  <div class="panel-title">LIVE OCR READOUT</div>
+  <div id="ocr-box"><div style="color:var(--dim)">Waiting for card...</div></div>
+
+  <div class="panel-title">DETECTION ACCURACY</div>
+  <div class="acc-bar-bg"><div class="acc-bar-fill" id="acc-bar" style="width:0%"></div></div>
+
+  <div class="panel-title">SCAN LOG <span id="log-count" style="color:var(--dim)">(0)</span></div>
+  <div id="scan-log"></div>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════
+//   STATE
+// ═══════════════════════════════════════════════
+const ARM_SERVER = "http://localhost:5050";
+
+const S = {
+  running: false,
+  speed: 3,
+  defectRate: 30,
+  total: 0, valid: 0, invalid: 0,
+  robotTriggers: 0,
+  cards: [],
+  nextId: 0,
+  spawnTimer: 0,
+  robotBusy: false,
+  armConnected: false,
+  logCount: 0,
+};
+
+// ═══════════════════════════════════════════════
+//   ARM CONNECTION
+// ═══════════════════════════════════════════════
+async function checkArmConnection() {
+  setBadge('connecting', 'CONNECTING...');
+  addRobotLog('Pinging SO-ARM101 server...', '');
+  try {
+    const res = await fetch(`${ARM_SERVER}/status`, { signal: AbortSignal.timeout(2000) });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    S.armConnected = true;
+    setBadge('connected', `ARM ${data.mode}`);
+    document.getElementById('rs-conn').textContent  = 'CONNECTED';
+    document.getElementById('rs-conn').className    = 'rs-val ok';
+    document.getElementById('rs-mode').textContent  = data.mode;
+    document.getElementById('rs-status').textContent = 'STANDBY';
+    document.getElementById('rs-status').className  = 'rs-val ok';
+    document.getElementById('info-port').textContent = data.port || '—';
+    addRobotLog(`Connected — mode: ${data.mode}`, 'ok');
+  } catch (e) {
+    S.armConnected = false;
+    setBadge('disconnected', 'ARM OFFLINE');
+    document.getElementById('rs-conn').textContent = 'OFFLINE';
+    document.getElementById('rs-conn').className   = 'rs-val err';
+    document.getElementById('rs-mode').textContent = 'N/A';
+    addRobotLog('Cannot reach robot_controller.py — run it first!', 'err');
+  }
+}
+
+function setBadge(state, text) {
+  const b = document.getElementById('conn-badge');
+  b.className = `conn-badge ${state}`;
+  document.getElementById('conn-text').textContent = text;
+}
+
+async function sendArmCommand(endpoint, body = {}) {
+  if (!S.armConnected) {
+    addRobotLog('ARM OFFLINE — command skipped', 'err');
+    return;
+  }
+  try {
+    const res = await fetch(`${ARM_SERVER}${endpoint}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(3000),
+    });
+    const data = await res.json();
+    return data;
+  } catch (e) {
+    addRobotLog(`ARM error: ${e.message}`, 'err');
+    S.armConnected = false;
+    setBadge('disconnected', 'ARM OFFLINE');
+  }
+}
+
+async function manualTriggerArm() {
+  S.robotTriggers++;
+  document.getElementById('rs-triggers').textContent = S.robotTriggers;
+  document.getElementById('rs-status').textContent = 'TRIGGERED';
+  document.getElementById('rs-status').className = 'rs-val active';
+  addRobotLog('Manual trigger sent', 'trigger');
+  animateArmReject();
+  await sendArmCommand('/reject', { card: { name: 'MANUAL DEMO', missing_field: 'DEMO TRIGGER' } });
+  setTimeout(() => {
+    document.getElementById('rs-status').textContent = 'STANDBY';
+    document.getElementById('rs-status').className   = 'rs-val ok';
+    addRobotLog('Manual trigger complete', 'ok');
+  }, 2500);
+}
+
+async function sendArmHome() {
+  addRobotLog('Sending arm to HOME...', '');
+  animateArmHome();
+  await sendArmCommand('/home');
+  addRobotLog('Arm at HOME position', 'ok');
+}
+
+function addRobotLog(msg, type) {
+  const log = document.getElementById('robot-log');
+  const now = new Date().toLocaleTimeString('en-IN', { hour12: false });
+  const d = document.createElement('div');
+  d.className = `rl-entry ${type}`;
+  d.textContent = `[${now}] ${msg}`;
+  log.insertBefore(d, log.firstChild);
+  while (log.children.length > 10) log.removeChild(log.lastChild);
+}
+
+// ═══════════════════════════════════════════════
+//   ARM ANIMATION  (SVG)
+// ═══════════════════════════════════════════════
+function animateArmReject() {
+  const upper = document.getElementById('arm-upper-g');
+  const lower = document.getElementById('arm-lower-g');
+  const glow  = document.getElementById('arm-glow');
+  const gripL = document.getElementById('grip-l');
+  const gripR = document.getElementById('grip-r');
+
+  // Glow on
+  glow.setAttribute('stroke', 'rgba(255,170,0,0.25)');
+
+  // 1. Extend down (lean forward + extend lower arm)
+  setTimeout(() => {
+    upper.style.transform = 'rotate(20deg)';
+    lower.style.transform = 'rotate(25deg)';
+  }, 100);
+
+  // 2. Close gripper (grab)
+  setTimeout(() => {
+    gripL.style.transform = 'rotate(-2deg)';
+    gripR.style.transform = 'rotate(2deg)';
+    glow.setAttribute('stroke', 'rgba(255,58,58,0.4)');
+  }, 700);
+
+  // 3. Lift back up
+  setTimeout(() => {
+    upper.style.transform = 'rotate(-15deg)';
+    lower.style.transform = 'rotate(-10deg)';
+  }, 1100);
+
+  // 4. Rotate toward bin (pan)
+  setTimeout(() => {
+    upper.style.transform = 'rotate(30deg)';
+    lower.style.transform = 'rotate(10deg)';
+  }, 1500);
+
+  // 5. Drop (open gripper)
+  setTimeout(() => {
+    gripL.style.transform = 'rotate(-10deg)';
+    gripR.style.transform = 'rotate(10deg)';
+    glow.setAttribute('stroke', 'rgba(0,212,255,0.2)');
+  }, 1900);
+
+  // 6. Return home
+  setTimeout(() => {
+    upper.style.transform = 'rotate(0deg)';
+    lower.style.transform = 'rotate(0deg)';
+    gripL.style.transform = 'rotate(-8deg)';
+    gripR.style.transform = 'rotate(8deg)';
+    glow.setAttribute('stroke', 'rgba(0,212,255,0)');
+    S.robotBusy = false;
+    document.getElementById('rs-status').textContent = 'STANDBY';
+    document.getElementById('rs-status').className   = 'rs-val ok';
+  }, 2400);
+}
+
+function animateArmHome() {
+  const upper = document.getElementById('arm-upper-g');
+  const lower = document.getElementById('arm-lower-g');
+  upper.style.transform = 'rotate(0deg)';
+  lower.style.transform = 'rotate(0deg)';
+}
+
+// ═══════════════════════════════════════════════
+//   CARD DATA
+// ═══════════════════════════════════════════════
+const NAMES  = ["Yash Shinde","Priya Mehta","Arjun Nair","Sneha Patil","Rohan Gupta","Divya Shah","Kunal Rao","Ananya Iyer","Karan Joshi","Pooja Desai","Sahil Verma","Neha Kulkarni","Aditya Kumar","Riya Bose","Vikram Singh","Tanvi Patel"];
+const ORGS   = ["DMS","IEEE","ACM","CSE","ECE","MECH","EXTC","IT"];
+const CITIES = ["Pune","Mumbai","Delhi","Bangalore","Hyderabad","Chennai","Kolkata","Jaipur"];
+const ROLES  = ["PARTICIPANT","VOLUNTEER","MENTOR","ORGANIZER","JUDGE"];
+const DEFECTS = [
+  { field:"name",  label:"Missing Name"    },
+  { field:"org",   label:"Missing Org"     },
+  { field:"city",  label:"Missing City"    },
+  { field:"role",  label:"Missing Role"    },
+  { field:"photo", label:"No Photo Found"  },
+];
+
+function rnd(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
+
+function makeCard() {
+  const bad    = Math.random() * 100 < S.defectRate;
+  const defect = bad ? DEFECTS[Math.floor(Math.random() * DEFECTS.length)] : null;
+  return {
+    id:      S.nextId++,
+    name:    defect?.field === 'name'  ? null : rnd(NAMES),
+    org:     defect?.field === 'org'   ? null : rnd(ORGS),
+    city:    defect?.field === 'city'  ? null : rnd(CITIES),
+    role:    defect?.field === 'role'  ? null : rnd(ROLES),
+    photo:   defect?.field !== 'photo',
+    defect,
+    isValid: !bad,
+    x: document.getElementById('sim-wrap').offsetWidth - 20,
+    scanned: false,
+    phase: 'belt',
+    flyProgress: 0,
+    flyStart: null, flyEnd: null,
+  };
+}
+
+function mkCardEl(card) {
+  const el = document.createElement('div');
+  el.className = 'id-card';
+  el.id = `c${card.id}`;
+  el.style.left = card.x + 'px';
+  const stripe = card.isValid
+    ? 'linear-gradient(90deg,#00aaff,#006ecc)'
+    : 'linear-gradient(90deg,#cc2222,#881111)';
+  el.innerHTML = `<div class="card-inner">
+    <div class="card-stripe" style="background:${stripe}"></div>
+    <div class="card-photo ${card.photo?'':'missing'}">${card.photo?'🧑':'✗'}</div>
+    <div class="card-text">
+      <div class="cname ${card.name?'':'miss'}">${card.name||'— MISSING —'}</div>
+      <div class="corg ${card.org?'':'miss'}">${card.org||'???'} · ${card.city||'???'}</div>
+      <div class="corg" style="font-size:5px;color:#3a6a8a;margin-top:1px">${card.role||'— NO ROLE —'}</div>
+    </div>
+    <div class="card-barcode"></div>
+  </div>`;
+  el.addEventListener('mouseenter', e => {
+    const t = document.getElementById('tooltip');
+    t.innerHTML = `<b style="color:${card.isValid?'var(--accent2)':'var(--danger)'}">${card.isValid?'✓ VALID':'✗ INVALID'}</b><br>
+      Name: ${card.name||'<span style="color:var(--danger)">MISSING</span>'}<br>
+      Org: ${card.org||'<span style="color:var(--danger)">MISSING</span>'}<br>
+      City: ${card.city||'<span style="color:var(--danger)">MISSING</span>'}<br>
+      Role: ${card.role||'<span style="color:var(--danger)">MISSING</span>'}<br>
+      Photo: ${card.photo?'✓':'<span style="color:var(--danger)">✗</span>'}
+      ${card.defect?`<br><span style="color:var(--danger)">⚠ ${card.defect.label}</span>`:''}`;
+    t.style.display = 'block';
+    t.style.left = (e.clientX+12)+'px';
+    t.style.top  = (e.clientY-10)+'px';
+  });
+  el.addEventListener('mouseleave', () => document.getElementById('tooltip').style.display='none');
+  document.getElementById('sim-canvas').appendChild(el);
+  return el;
+}
+
+// ═══════════════════════════════════════════════
+//   GAME LOOP
+// ═══════════════════════════════════════════════
+const SPEED_MAP    = [0,0.7,1.3,2.0,3.0,4.5];
+const SPEED_LABELS = ['','SLOW','NORMAL','NORMAL','FAST','TURBO'];
+let lastT = 0;
+
+function loop(ts) {
+  requestAnimationFrame(loop);
+  if (!S.running) return;
+  const dt = Math.min(ts - lastT, 50);
+  lastT = ts;
+
+  // Spawn
+  S.spawnTimer += dt;
+  const interval = 160 / (S.speed * 0.55);
+  if (S.spawnTimer > interval && S.cards.length < 7) {
+    S.spawnTimer = 0;
+    const c = makeCard();
+    S.cards.push(c);
+    mkCardEl(c);
+  }
+
+  const simW   = document.getElementById('sim-wrap').offsetWidth;
+  const scanX  = simW * 0.44;
+  const spd    = SPEED_MAP[S.speed];
+
+  S.cards.forEach(card => {
+    if (card.ejected) return;
+    const el = document.getElementById(`c${card.id}`);
+    if (!el) return;
+
+    if (card.phase === 'belt') {
+      card.x -= spd * (dt / 16);
+      el.style.left = card.x + 'px';
+      if (card.x < scanX && !card.scanned) {
+        card.scanned = true;
+        card.phase   = 'scanning';
+        doScan(card, el);
+      }
+      if (card.x < -110) dropCard(card, el);
+    }
+
+    else if (card.phase === 'fly') {
+      card.flyProgress += dt / 650;
+      if (card.flyProgress >= 1) { dropCard(card, el); return; }
+      const t  = card.flyProgress;
+      const e2 = t < .5 ? 2*t*t : -1+(4-2*t)*t;
+      const cx = card.flyStart.x + (card.flyEnd.x - card.flyStart.x) * e2;
+      const cy = card.flyStart.y + (card.flyEnd.y - card.flyStart.y) * e2 - Math.sin(Math.PI*t)*55;
+      el.style.left    = cx + 'px';
+      el.style.top     = cy + 'px';
+      el.style.opacity = 1 - t;
+      el.style.transform = `scale(${1-t*.5}) rotate(${t*18}deg)`;
+    }
+  });
+}
+
+// ═══════════════════════════════════════════════
+//   SCAN
+// ═══════════════════════════════════════════════
+function doScan(card, el) {
+  setStatus('SCANNING...', true);
+  updateOCR(card, true);
+  el.classList.add('scanning');
+  document.getElementById('scan-zone').classList.add('active');
+
+  setTimeout(async () => {
+    el.classList.remove('scanning');
+    document.getElementById('scan-zone').classList.remove('active');
+    updateOCR(card, false);
+    S.total++;
+
+    if (card.isValid) {
+      el.classList.add('valid-flash');
+      S.valid++;
+      updateCounters();
+      addLog(card);
+      flash('green');
+      setStatus('CARD VALID — PASSING', false);
+      setTimeout(() => { el.classList.remove('valid-flash'); card.phase='belt'; }, 600);
+      setTimeout(() => setStatus('SYSTEM RUNNING', false), 1400);
+    } else {
+      el.classList.add('invalid-flash');
+      S.invalid++;
+      S.robotTriggers++;
+      updateCounters();
+      addLog(card);
+      flash('red');
+      setStatus('⚠ DEFECT DETECTED — ARM TRIGGERED', true);
+
+      // Update robot UI
+      document.getElementById('rs-status').textContent  = 'TRIGGERED';
+      document.getElementById('rs-status').className    = 'rs-val active';
+      document.getElementById('rs-action').textContent  = card.defect?.label || 'DEFECT';
+      document.getElementById('rs-triggers').textContent = S.robotTriggers;
+      addRobotLog(`REJECT triggered — ${card.defect?.label}`, 'trigger');
+
+      // Animate sim arm
+      S.robotBusy = true;
+      animateArmReject();
+
+      // ← REAL ARM COMMAND
+      const result = await sendArmCommand('/reject', {
+        card: {
+          name:          card.name || 'UNKNOWN',
+          missing_field: card.defect?.label || 'DEFECT',
+          org:           card.org  || '',
+          city:          card.city || '',
+        }
+      });
+
+      if (result?.triggered) {
+        addRobotLog(`Arm executing: REJECT sequence`, 'ok');
+      }
+
+      // Fly card to bin after delay
+      setTimeout(() => {
+        const simWrap = document.getElementById('sim-wrap');
+        const wrapRect = simWrap.getBoundingClientRect();
+        const binRect  = document.getElementById('bin-invalid').getBoundingClientRect();
+        const beltY    = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--belt-y')) || 310;
+        card.flyStart = { x: card.x, y: beltY + 21 };
+        card.flyEnd   = { x: binRect.left - wrapRect.left + 5, y: binRect.top - wrapRect.top + 15 };
+        card.flyProgress = 0;
+        card.phase = 'fly';
+        el.classList.remove('invalid-flash');
+      }, 1000);
+
+      setTimeout(() => {
+        updateBins();
+        setStatus('SYSTEM RUNNING', false);
+        addRobotLog('Reject sequence complete', 'ok');
+      }, 2600);
+    }
+
+    updateBins();
+  }, 850 + Math.random() * 350);
+}
+
+// ═══════════════════════════════════════════════
+//   OCR READOUT
+// ═══════════════════════════════════════════════
+function updateOCR(card, scanning) {
+  const fields = [
+    { k:'NAME',  v:card.name,  ok:!!card.name  },
+    { k:'ORG',   v:card.org,   ok:!!card.org   },
+    { k:'CITY',  v:card.city,  ok:!!card.city  },
+    { k:'ROLE',  v:card.role,  ok:!!card.role  },
+    { k:'PHOTO', v:card.photo?'DETECTED':'NOT FOUND', ok:card.photo },
+  ];
+  document.getElementById('ocr-box').innerHTML = fields.map(f =>
+    `<div class="ocr-field"><span class="ocr-key">${f.k}</span>
+     <span class="ocr-val ${scanning?'scanning':(f.ok?'':'miss')}">${scanning?'...':(f.v||'— MISSING —')}</span></div>`
+  ).join('');
+}
+
+// ═══════════════════════════════════════════════
+//   LOG
+// ═══════════════════════════════════════════════
+function addLog(card) {
+  S.logCount++;
+  document.getElementById('log-count').textContent = `(${S.logCount})`;
+  const log  = document.getElementById('scan-log');
+  const time = new Date().toLocaleTimeString('en-IN',{hour12:false});
+  const d    = document.createElement('div');
+  d.className = `log-entry ${card.isValid?'valid':'invalid'}`;
+  d.innerHTML = `
+    <div class="le-name">${card.name||'— NO NAME —'}</div>
+    <div class="le-status">${card.isValid?'✓ VALID — PASSED':'✗ INVALID — EJECTED'}</div>
+    ${!card.isValid?`<div class="le-issue">⚠ ${card.defect?.label}</div>`:''}
+    <div class="le-time">${time} · ${card.org||'?'} · ${card.city||'?'}</div>`;
+  log.insertBefore(d, log.firstChild);
+  while (log.children.length > 20) log.removeChild(log.lastChild);
+}
+
+// ═══════════════════════════════════════════════
+//   HELPERS
+// ═══════════════════════════════════════════════
+function dropCard(card, el) {
+  card.ejected = true;
+  el.remove();
+  S.cards = S.cards.filter(c => c.id !== card.id);
+}
+
+function updateCounters() {
+  document.getElementById('hdr-total').textContent    = S.total;
+  document.getElementById('hdr-valid').textContent    = S.valid;
+  document.getElementById('hdr-invalid').textContent  = S.invalid;
+  document.getElementById('valid-count').textContent  = S.valid;
+  document.getElementById('invalid-count').textContent = S.invalid;
+  const acc = S.total > 0 ? '100%' : '—';
+  document.getElementById('hdr-acc').textContent = acc;
+  document.getElementById('acc-bar').style.width = S.total > 0 ? '100%' : '0%';
+}
+
+function updateBins() {
+  document.getElementById('valid-fill').style.height   = Math.min(S.valid   * 5, 90) + '%';
+  document.getElementById('invalid-fill').style.height = Math.min(S.invalid * 8, 90) + '%';
+}
+
+function setStatus(text, warn) {
+  document.getElementById('status-text').textContent = text;
+  document.getElementById('pulse-dot').style.background = warn ? 'var(--danger)' : 'var(--accent2)';
+}
+
+function flash(color) {
+  const ov = document.getElementById('alert-overlay');
+  ov.style.background = color === 'red' ? 'rgba(255,0,0,.07)' : 'rgba(0,255,157,.04)';
+  ov.style.opacity = '1';
+  ov.style.animation = `${color==='red'?'flashRed':'flashGreen'} .4s ease-out forwards`;
+  void ov.offsetWidth;
+  ov.style.animation = `${color==='red'?'flashRed':'flashGreen'} .4s ease-out forwards`;
+}
+
+// ═══════════════════════════════════════════════
+//   CONTROLS
+// ═══════════════════════════════════════════════
+function startSystem() {
+  S.running = true;
+  setStatus('SYSTEM RUNNING', false);
+  document.getElementById('belt-lines').style.animationPlayState = 'running';
+  lastT = performance.now();
+}
+
+function stopSystem() {
+  S.running = false;
+  setStatus('SYSTEM PAUSED', false);
+  document.getElementById('belt-lines').style.animationPlayState = 'paused';
+}
+
+function resetSystem() {
+  stopSystem();
+  Object.assign(S, { total:0, valid:0, invalid:0, robotTriggers:0, cards:[], nextId:0, spawnTimer:0 });
+  document.querySelectorAll('.id-card').forEach(e=>e.remove());
+  updateCounters(); updateBins();
+  document.getElementById('valid-fill').style.height   = '0%';
+  document.getElementById('invalid-fill').style.height = '0%';
+  document.getElementById('scan-log').innerHTML = '';
+  document.getElementById('ocr-box').innerHTML  = '<div style="color:var(--dim)">Waiting for card...</div>';
+  document.getElementById('log-count').textContent = '(0)';
+  S.logCount = 0;
+  setStatus('SYSTEM READY', false);
+  document.getElementById('rs-status').textContent = 'STANDBY';
+  document.getElementById('rs-status').className   = 'rs-val ok';
+  document.getElementById('rs-action').textContent = '—';
+  document.getElementById('rs-triggers').textContent = '0';
+  document.getElementById('hdr-acc').textContent = '—';
+  document.getElementById('acc-bar').style.width = '0%';
+  document.getElementById('belt-lines').style.animationPlayState = 'paused';
+  animateArmHome();
+  addRobotLog('System reset', '');
+}
+
+function updateSpeed(v) {
+  S.speed = parseInt(v);
+  document.getElementById('speed-val').textContent = SPEED_LABELS[S.speed];
+  document.getElementById('belt-lines').style.animationDuration = (1.6/(S.speed*.5))+'s';
+}
+
+function updateDefectRate(v) {
+  S.defectRate = parseInt(v);
+  document.getElementById('defect-val').textContent = v + '%';
+}
+
+// ═══════════════════════════════════════════════
+//   INIT
+// ═══════════════════════════════════════════════
+window.addEventListener('load', () => {
+  requestAnimationFrame(loop);
+  // Try to connect to arm on load
+  setTimeout(checkArmConnection, 800);
+  // Re-check every 10 seconds
+  setInterval(() => { if (!S.armConnected) checkArmConnection(); }, 10000);
+});
+</script>
+</body>
+</html>
